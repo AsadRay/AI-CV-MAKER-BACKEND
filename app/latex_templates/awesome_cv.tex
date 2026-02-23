@@ -1,0 +1,82 @@
+\documentclass[11pt,a4paper]{article}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=0.75in]{geometry}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{parskip}
+
+% Colors
+\definecolor{primary}{RGB}{41, 128, 185}
+\definecolor{darkgray}{RGB}{64, 64, 64}
+\definecolor{lightgray}{RGB}{128, 128, 128}
+
+% Hyperlink setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=primary,
+    urlcolor=primary,
+}
+
+% Remove page numbers
+\pagestyle{empty}
+
+% Section formatting
+\titleformat{\section}
+  {\Large\bfseries\color{primary}}
+  {}
+  {0em}
+  {}
+  [\color{primary}\titlerule]
+
+\titlespacing*{\section}{0pt}{12pt}{8pt}
+
+% Subsection formatting
+\titleformat{\subsection}[hang]
+  {\large\bfseries\color{darkgray}}
+  {}
+  {0em}
+  {}
+
+\titlespacing*{\subsection}{0pt}{8pt}{4pt}
+
+\begin{document}
+
+%-------------------------------------------------------------------------------
+% HEADER
+%-------------------------------------------------------------------------------
+\begin{center}
+{header_block}
+\end{center}
+
+\vspace{0.5cm}
+
+%-------------------------------------------------------------------------------
+% EDUCATION
+%-------------------------------------------------------------------------------
+\section*{EDUCATION}
+{education_block}
+
+%-------------------------------------------------------------------------------
+% EXPERIENCE
+%-------------------------------------------------------------------------------
+\section*{EXPERIENCE}
+{experience_block}
+
+%-------------------------------------------------------------------------------
+% SKILLS
+%-------------------------------------------------------------------------------
+\section*{SKILLS}
+{skills_block}
+
+%-------------------------------------------------------------------------------
+% PROJECTS
+%-------------------------------------------------------------------------------
+\section*{PROJECTS}
+{projects_block}
+
+\end{document}

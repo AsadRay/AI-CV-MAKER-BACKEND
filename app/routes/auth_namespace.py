@@ -1,0 +1,57 @@
+from flask_restx import Namespace, Resource, fields
+from flask import request
+from ..controllers.auth_controller import register_user, login_user, verify_otp_and_create_user, resend_otp
+
+auth_ns = Namespace("auth", description="Authentication operations")
+
+register_model = auth_ns.model("Register", {
+    "name": fields.String(required=True),
+    "email": fields.String(required=True),
+    "password": fields.String(required=True)
+})
+
+login_model = auth_ns.model("Login", {
+    "email": fields.String(required=True),
+    "password": fields.String(required=True)
+})
+
+otp_verify_model = auth_ns.model("VerifyOTP", {
+    "email": fields.String(required=True),
+    "otp": fields.String(required=True)
+})
+
+otp_resend_model = auth_ns.model("ResendOTP", {
+    "email": fields.String(required=True)
+})
+
+
+@auth_ns.route("/register")
+class Register(Resource):
+    @auth_ns.expect(register_model)
+    def post(self):
+        data = request.json
+        return register_user(data)
+
+
+@auth_ns.route("/verify-otp")
+class VerifyOTP(Resource):
+    @auth_ns.expect(otp_verify_model)
+    def post(self):
+        data = request.json
+        return verify_otp_and_create_user(data)
+
+
+@auth_ns.route("/resend-otp")
+class ResendOTP(Resource):
+    @auth_ns.expect(otp_resend_model)
+    def post(self):
+        data = request.json
+        return resend_otp(data)
+
+
+@auth_ns.route("/login")
+class Login(Resource):
+    @auth_ns.expect(login_model)
+    def post(self):
+        data = request.json
+        return login_user(data)
