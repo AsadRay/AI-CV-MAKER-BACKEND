@@ -7,6 +7,7 @@ from flask_jwt_extended import create_access_token, create_refresh_token
 from werkzeug.security import generate_password_hash, check_password_hash
 from ..models.user import User
 from ..extensions import db
+import uuid
 
 resend.api_key = os.getenv('RESEND_API_KEY')
 
@@ -157,7 +158,11 @@ def resend_otp(data):
 def login_user(data):
     user = User.query.filter_by(email=data.get('email')).first()
 
-    if not user or not check_password_hash(user.password_hash, data.get('password')):
+    
+    if not user:
+        return {"message": "User not found"}, 404
+
+    if not check_password_hash(user.password_hash, data.get('password')):
         return {"message": "Invalid email or password"}, 401
 
     access_token = create_access_token(identity=str(user.id))
@@ -169,3 +174,68 @@ def login_user(data):
         "refresh_token": refresh_token,
         "user": {"id": str(user.id), "name": user.name, "email": user.email}
     }, 200
+
+
+def forget_password(data):
+    email = data.get('email')
+    user = User.query.filter_by(email=email).first()
+
+    if not user:
+        return {"message": "If this email exists, OTP has been sent."}, 200
+
+    otp = generate_otp()
+
+    # Store OTP in Redis (5 min)
+    r.setex(f"reset_otp:{email}", 300, otp)
+
+    send_otp_email(email, otp)
+
+    return {"message": "OTP sent to your email."}, 200
+
+
+def verify_password_reset_otp(data):
+    email = data.get('email')
+    otp_input = data.get('otp')
+
+    stored_otp = r.get(f"reset_otp:{email}")
+
+    if not stored_otp:
+        return {"message": "OTP expired or not found."}, 400
+
+    if stored_otp != otp_input:
+        return {"message": "Invalid OTP."}, 400
+
+    # Delete OTP
+    r.delete(f"reset_otp:{email}")
+
+    # Create short-lived reset token (5 min)
+    reset_token = str(uuid.uuid4())
+    r.setex(f"reset_token:{reset_token}", 300, email)
+
+    return {
+        "message": "OTP verified.",
+        "reset_token": reset_token
+    }, 200
+
+
+def reset_password(data):
+    reset_token = data.get('reset_token')
+    new_password = data.get('new_password')
+
+    email = r.get(f"reset_token:{reset_token}")
+
+    if not email:
+        return {"message": "Invalid or expired reset token."}, 400
+
+    user = User.query.filter_by(email=email).first()
+
+    if not user:
+        return {"message": "User not found."}, 404
+
+    user.password_hash = generate_password_hash(new_password)
+    db.session.commit()
+
+    # Delete reset token after success
+    r.delete(f"reset_token:{reset_token}")
+
+    return {"message": "Password reset successful."}, 200

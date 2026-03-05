@@ -88,6 +88,7 @@ class SingleCV(Resource):
                     "education": [],
                     "skills": [],
                     "projects": [],
+                    "research_and_publications": [],
                     "certifications": [],
                 },
                 "created_at": cv.created_at.isoformat(),  # Convert datetime to string
@@ -99,7 +100,6 @@ class SingleCV(Resource):
     
     @jwt_required()
     def delete(self, cv_id):
-        """Delete a CV"""
         try:
             user_id = get_jwt_identity()
             cv = CV.query.filter_by(id=cv_id, user_id=user_id).first()
@@ -189,6 +189,7 @@ class CVChat(Resource):
                 "education": [],
                 "skills": [],
                 "projects": [],
+                "research_and_publications": [],
                 "certifications": [],
             }
 

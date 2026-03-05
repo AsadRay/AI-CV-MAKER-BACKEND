@@ -7,3 +7,5 @@ venv/
 env/
 *.env
 *.log
+migrations/
+services/ai_service.py

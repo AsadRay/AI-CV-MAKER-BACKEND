@@ -17,16 +17,55 @@ def generate_structured_cv(user_message, existing_data=None):
     Generate or update CV data through conversational AI.
     AI asks questions and fills data progressively.
     """
-    
+
     # Initialize empty structure if no existing data
     if existing_data is None:
         existing_data = {
-            "personal_info": {"name": "", "email": "", "phone": "", "location": "", "position": "", "summary": "", "linkedin": "", "github": "", "portfolio": "", "twitter": "", "leetcode": "", "codechef": "", "hackerrank": "", "hackerrank": ""},
+            "personal_info": {
+                "name": "", "email": "", "phone": "", "location": "",
+                "position": "", "summary": "", "linkedin": "", "github": "",
+                "portfolio": "", "twitter": "", "leetcode": "", "codechef": "",
+                "hackerrank": ""
+            },
             "education": [],
             "experience": [],
             "skills": [],
             "projects": [],
-            "certifications": []
+            "certifications": [],
+            "research_and_publications": [],
+            "layout_settings": {
+                "page_break_before_projects": False,
+                "page_break_before_certifications": False,
+                "page_break_before_experience": False,
+                "page_break_before_education": False,
+                "page_break_before_skills": False,
+                "page_break_before_research": False,
+                "margin_after_summary": 0,
+                "margin_after_experience": 0,
+                "margin_after_education": 0,
+                "margin_after_skills": 0,
+                "margin_after_projects": 0,
+                "margin_after_certifications": 0,
+                "margin_after_research": 0,
+            }
+        }
+
+    # Ensure layout_settings exists in existing data (for old CVs)
+    if "layout_settings" not in existing_data:
+        existing_data["layout_settings"] = {
+            "page_break_before_projects": False,
+            "page_break_before_certifications": False,
+            "page_break_before_experience": False,
+            "page_break_before_education": False,
+            "page_break_before_skills": False,
+            "page_break_before_research": False,
+            "margin_after_summary": 0,
+            "margin_after_experience": 0,
+            "margin_after_education": 0,
+            "margin_after_skills": 0,
+            "margin_after_projects": 0,
+            "margin_after_certifications": 0,
+            "margin_after_research": 0,
         }
 
     # Check if CV has existing data
@@ -34,7 +73,10 @@ def generate_structured_cv(user_message, existing_data=None):
         existing_data.get('personal_info', {}).get('name') or
         len(existing_data.get('experience', [])) > 0 or
         len(existing_data.get('education', [])) > 0 or
-        len(existing_data.get('skills', [])) > 0
+        len(existing_data.get('skills', [])) > 0 or
+        len(existing_data.get('projects', [])) > 0 or
+        len(existing_data.get('certifications', [])) > 0 or
+        len(existing_data.get('research_and_publications', [])) > 0
     )
 
     url = "https://openrouter.ai/api/v1/chat/completions"
@@ -44,194 +86,203 @@ def generate_structured_cv(user_message, existing_data=None):
         "Content-Type": "application/json"
     }
 
-    # Different system prompts based on whether CV has data
+    layout_instructions = """
+LAYOUT COMMANDS — When the user asks to adjust spacing or page breaks, update layout_settings:
+
+PAGE BREAKS (set to true to force section onto a new page):
+  "start projects on page 2" / "projects on new page"       → page_break_before_projects: true
+  "start certifications on new page"                         → page_break_before_certifications: true
+  "start experience on new page"                             → page_break_before_experience: true
+  "start education on new page"                              → page_break_before_education: true
+  "start skills on new page"                                 → page_break_before_skills: true
+  "start research on new page"                               → page_break_before_research: true
+  To remove a page break, set the value back to false.
+
+BLANK SPACE / MARGINS (value in px, added after the section):
+  Conversion rules:
+    "1 blank line"  / "1 blank space"  → 40
+    "2 blank lines" / "2 blank spaces" → 80
+    "3 blank lines" / "3 blank spaces" → 120
+    "small space"                      → 20
+    "medium space"                     → 60
+    "large space"                      → 100
+    "remove space"  / "no space"       → 0
+
+  Examples:
+    "add 2 blank lines after skills"           → margin_after_skills: 80
+    "add 1 blank space after experience"       → margin_after_experience: 40
+    "large space after projects"               → margin_after_projects: 100
+    "remove space after education"             → margin_after_education: 0
+    "3 blank lines before projects section"    → margin_after_skills: 120
+      (space before projects = space after the section that comes before it)
+
+Always confirm to the user what layout change was made, e.g.:
+  "Done! I've added 2 blank lines after the Skills section."
+  "Got it! Projects will now start on a new page."
+"""
+
+    # ─── SYSTEM PROMPT: UPDATE MODE ───────────────────────────────────────────
     if has_existing_data:
-        system_prompt = """
+        system_prompt = f"""
 You are a professional resume builder helping the user UPDATE their existing CV.
 
 The user already has some information in their CV. Your job is to:
 1. Help them update or modify existing sections
 2. Add new information they provide
-3. NEVER delete existing data unless they explicitly ask to remove it
-4. Ask clarifying questions when needed
-5. Be conversational and helpful
+3. Handle layout/spacing commands (see LAYOUT COMMANDS below)
+4. NEVER delete existing data unless they explicitly ask to remove it
+5. Ask clarifying questions when needed
+6. Be conversational and helpful
+
+{layout_instructions}
 
 CRITICAL: You MUST respond with ONLY a JSON object. No other text before or after.
 
 JSON Structure (ALWAYS include this complete structure in your response):
-{
-  "cv_data": {
-    "personal_info": {
-      "name": "",
-      "email": "",
-      "phone": "",
-      "location": "",
-      "position": "",
-      "summary": ""
-    },
+{{
+  "cv_data": {{
+    "personal_info": {{
+      "name": "", "email": "", "phone": "", "location": "",
+      "position": "", "summary": ""
+    }},
     "education": [
-      {
-        "degree": "",
-        "institution": "",
-        "start_date": "",
-        "end_date": "",
-        "location": "",
-        "gpa": ""
-      }
+      {{
+        "degree": "", "institution": "", "start_date": "",
+        "end_date": "", "location": "", "gpa": ""
+      }}
     ],
     "experience": [
-      {
-        "position": "",
-        "company": "",
-        "start_date": "",
-        "end_date": "",
-        "location": "",
-        "responsibilities": []
-      }
+      {{
+        "position": "", "company": "", "start_date": "",
+        "end_date": "", "location": "", "responsibilities": []
+      }}
     ],
-    "skills": [{"name": ""}],
+    "skills": [{{"name": ""}}],
     "projects": [
-      {
-        "name": "",
-        "description": "",
-        "technologies": "",
-        "date": ""
-      }
+      {{
+        "name": "", "description": "", "technologies": "",
+        "date": "", "link": ""
+      }}
     ],
     "certifications": [
-      {
-        "name": "",
-        "issuer": "",
-        "date": "",
-        "expiry_date": "",
-        "credential_id": ""
-      }
-    ]
-  },
+      {{
+        "name": "", "issuer": "", "date": "",
+        "expiry_date": "", "credential_id": ""
+      }}
+    ],
+    "research_and_publications": [
+      {{
+        "title": "", "publication": "", "date": "", "link": ""
+      }}
+    ],
+    "layout_settings": {{
+      "page_break_before_projects": false,
+      "page_break_before_certifications": false,
+      "page_break_before_experience": false,
+      "page_break_before_education": false,
+      "page_break_before_skills": false,
+      "page_break_before_research": false,
+      "margin_after_summary": 0,
+      "margin_after_experience": 0,
+      "margin_after_education": 0,
+      "margin_after_skills": 0,
+      "margin_after_projects": 0,
+      "margin_after_certifications": 0,
+      "margin_after_research": 0
+    }}
+  }},
   "next_question": "Your next question here",
   "ai_message": "A friendly response acknowledging what they said",
   "progress_percentage": 0,
   "current_section": "personal_info",
   "all_complete": false
-}
+}}
 
 IMPORTANT Rules for UPDATING:
-- MERGE new information with existing data - DO NOT replace entire sections
-- If user wants to add a new job, ADD it to the experience array, don't replace existing jobs
+- MERGE new information with existing data — DO NOT replace entire sections
+- If user wants to add a new job, ADD it to the experience array
 - If user wants to add skills, APPEND them to existing skills
 - Only UPDATE specific fields the user mentions
 - Keep all other existing data intact
-- Ask "Is there anything else you'd like to update?" when they seem done with a section
-
-Examples:
-
-User: "I want to add a new skill"
-Current CV has: skills: [{"name": "Python"}]
-Response:
-{
-  "cv_data": {
-    "personal_info": {...existing data...},
-    "education": [...existing data...],
-    "experience": [...existing data...],
-    "skills": [{"name": "Python"}],
-    "projects": [...existing data...],
-    "certifications": [...existing data...]
-  },
-  "next_question": "What skill would you like to add?",
-  "ai_message": "Sure! What new skill would you like to add to your CV?",
-  "progress_percentage": 60,
-  "current_section": "skills",
-  "all_complete": false
-}
-
-User: "JavaScript and React"
-Current CV has: skills: [{"name": "Python"}]
-Response:
-{
-  "cv_data": {
-    "personal_info": {...existing data...},
-    "education": [...existing data...],
-    "experience": [...existing data...],
-    "skills": [{"name": "Python"}, {"name": "JavaScript"}, {"name": "React"}],
-    "projects": [...existing data...],
-    "certifications": [...existing data...]
-  },
-  "next_question": "Great! Any other skills you'd like to add?",
-  "ai_message": "Added JavaScript and React to your skills! These are great additions.",
-  "progress_percentage": 65,
-  "current_section": "skills",
-  "all_complete": false
-}
+- For layout commands, only update the specific layout_settings fields mentioned
+- Ask "Is there anything else you'd like to update?" when they seem done
 """
+
+    # ─── SYSTEM PROMPT: NEW CV MODE ───────────────────────────────────────────
     else:
-        # Original system prompt for new CVs
-        system_prompt = """
+        system_prompt = f"""
 You are a professional resume builder having a friendly conversation with the user.
 
 Your job is to:
 1. Ask ONE question at a time to gather CV information
 2. Extract and store the information in the JSON structure
-3. Guide the user through: Personal Info → Education → Experience → Skills → Projects → Certifications
-4. Be conversational, friendly, and encouraging
+3. Handle layout/spacing commands at any time (see LAYOUT COMMANDS below)
+4. Guide the user through: Personal Info → Education → Experience → Skills → Projects → Certifications → Research and Publications
+5. Be conversational, friendly, and encouraging
+
+{layout_instructions}
 
 CRITICAL: You MUST respond with ONLY a JSON object. No other text before or after.
 
 JSON Structure (ALWAYS include this complete structure in your response):
-{
-  "cv_data": {
-    "personal_info": {
-      "name": "",
-      "email": "",
-      "phone": "",
-      "location": "",
-      "position": "",
-      "summary": ""
-    },
+{{
+  "cv_data": {{
+    "personal_info": {{
+      "name": "", "email": "", "phone": "", "location": "",
+      "position": "", "summary": ""
+    }},
     "education": [
-      {
-        "degree": "",
-        "institution": "",
-        "start_date": "",
-        "end_date": "",
-        "location": "",
-        "gpa": ""
-      }
+      {{
+        "degree": "", "institution": "", "start_date": "",
+        "end_date": "", "location": "", "gpa": ""
+      }}
     ],
     "experience": [
-      {
-        "position": "",
-        "company": "",
-        "start_date": "",
-        "end_date": "",
-        "location": "",
-        "responsibilities": []
-      }
+      {{
+        "position": "", "company": "", "start_date": "",
+        "end_date": "", "location": "", "responsibilities": []
+      }}
     ],
-    "skills": [{"name": ""}],
+    "skills": [{{"name": ""}}],
     "projects": [
-      {
-        "name": "",
-        "description": "",
-        "technologies": "",
-        "date": ""
-      }
+      {{
+        "name": "", "description": "", "technologies": "",
+        "date": "", "link": ""
+      }}
     ],
     "certifications": [
-      {
-        "name": "",
-        "issuer": "",
-        "date": "",
-        "expiry_date": "",
-        "credential_id": ""
-      }
-    ]
-  },
+      {{
+        "name": "", "issuer": "", "date": "",
+        "expiry_date": "", "credential_id": ""
+      }}
+    ],
+    "research_and_publications": [
+      {{
+        "title": "", "publication": "", "date": "", "link": ""
+      }}
+    ],
+    "layout_settings": {{
+      "page_break_before_projects": false,
+      "page_break_before_certifications": false,
+      "page_break_before_experience": false,
+      "page_break_before_education": false,
+      "page_break_before_skills": false,
+      "page_break_before_research": false,
+      "margin_after_summary": 0,
+      "margin_after_experience": 0,
+      "margin_after_education": 0,
+      "margin_after_skills": 0,
+      "margin_after_projects": 0,
+      "margin_after_certifications": 0,
+      "margin_after_research": 0
+    }}
+  }},
   "next_question": "Your next question here",
   "ai_message": "A friendly response to the user",
   "progress_percentage": 0,
   "current_section": "personal_info",
   "all_complete": false
-}
+}}
 
 Rules:
 - Extract info from user's message and fill cv_data
@@ -249,49 +300,12 @@ Section Order:
 2. education (degrees, institutions, dates, GPAs)
 3. experience (positions, companies, dates, responsibilities)
 4. skills (list of skills)
-5. projects (name, description, technologies)
+5. projects (name, description, technologies, link)
 6. certifications (name, issuer, date, expiry_date, credential_id)
-
-Examples:
-
-User: "Hi" or "Hello" or "Start"
-Response:
-{
-  "cv_data": {
-    "personal_info": {"name": "", "email": "", "phone": "", "location": "", "position": "", "summary": ""},
-    "education": [],
-    "experience": [],
-    "skills": [],
-    "projects": [],
-    "certifications": []
-  },
-  "next_question": "What's your full name?",
-  "ai_message": "Hi! I'm excited to help you build your CV. Let's start with your basic information.",
-  "progress_percentage": 0,
-  "current_section": "personal_info",
-  "all_complete": false
-}
-
-User: "My name is John Smith and I'm a software engineer"
-Response:
-{
-  "cv_data": {
-    "personal_info": {"name": "John Smith", "email": "", "phone": "", "location": "", "position": "Software Engineer", "summary": ""},
-    "education": [],
-    "experience": [],
-    "skills": [],
-    "projects": [],
-    "certifications": []
-  },
-  "next_question": "What's your email address?",
-  "ai_message": "Nice to meet you, John! I've noted that you're a Software Engineer.",
-  "progress_percentage": 8,
-  "current_section": "personal_info",
-  "all_complete": false
-}
+7. research_and_publications (title, publication, date, link)
 """
 
-    # Build the user message based on context
+    # ─── USER CONTENT ─────────────────────────────────────────────────────────
     if has_existing_data:
         user_content = f"""
 Current CV Data (DO NOT DELETE THIS DATA - only update/add to it):
@@ -299,12 +313,13 @@ Current CV Data (DO NOT DELETE THIS DATA - only update/add to it):
 
 User's message: "{user_message}"
 
-IMPORTANT: 
+IMPORTANT:
 - MERGE the user's new information with the existing data above
 - DO NOT replace entire sections
 - ONLY update the specific fields the user mentions
 - Keep all other existing data exactly as it is
-- If adding to arrays (experience, education, skills, projects, certifications), APPEND new items
+- If adding to arrays (experience, education, skills, projects, certifications, research_and_publications), APPEND new items
+- If this is a layout command, ONLY update the relevant layout_settings fields
 
 Update the CV data and respond with your JSON.
 """
@@ -339,15 +354,32 @@ Remember to output ONLY JSON, nothing else. No explanations, no markdown.
         raw_output = result["choices"][0]["message"]["content"]
         cleaned_output = clean_ai_response(raw_output)
 
-        # Parse JSON
         try:
             ai_response = json.loads(cleaned_output)
-            
-            # Ensure all required fields exist
+
+            # Ensure layout_settings always exists in response
+            if "cv_data" in ai_response and "layout_settings" not in ai_response["cv_data"]:
+                ai_response["cv_data"]["layout_settings"] = existing_data.get("layout_settings", {
+                    "page_break_before_projects": False,
+                    "page_break_before_certifications": False,
+                    "page_break_before_experience": False,
+                    "page_break_before_education": False,
+                    "page_break_before_skills": False,
+                    "page_break_before_research": False,
+                    "margin_after_summary": 0,
+                    "margin_after_experience": 0,
+                    "margin_after_education": 0,
+                    "margin_after_skills": 0,
+                    "margin_after_projects": 0,
+                    "margin_after_certifications": 0,
+                    "margin_after_research": 0,
+                })
+
             if "ai_message" not in ai_response:
                 ai_response["ai_message"] = ai_response.get("next_question", "")
-            
+
             return ai_response
+
         except json.JSONDecodeError as e:
             print(f"JSON parse error: {str(e)}")
             print(f"Raw output: {cleaned_output[:500]}")
