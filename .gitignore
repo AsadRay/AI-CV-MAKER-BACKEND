@@ -1,11 +1,34 @@
+# Environment & secrets
+.env
+.env.*
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.env/
+*.pdb
+
+# Virtual environments
 venv/
 env/
-*.env
+.venv/
+
+# Logs
 *.log
-migrations/
-services/ai_service.py
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Database
+*.db
+*.sqlite3
+
+# Docker
+*.override.yml
+
+# IDE
+.vscode/
+.idea/

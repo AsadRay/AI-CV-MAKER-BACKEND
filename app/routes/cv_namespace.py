@@ -6,7 +6,12 @@ from flask import request
 from ..controllers.cv_controller import (
     create_cv,
     get_user_cvs,
-    get_single_cv
+    get_single_cv,
+    check_and_increment_message_limit,
+    limit_message_length,
+    check_and_increment_guest_limit,
+    verify_jwt_in_request
+
 )
 from ..services.ai_service import generate_structured_cv
 from ..models.cv import CV
@@ -154,74 +159,95 @@ class SingleCV(Resource):
             return {"message": f"Error updating CV: {str(e)}"}, 500
 
 
-@cv_ns.route("/<string:cv_id>/chat")
+@cv_ns.route("/chat")
 class CVChat(Resource):
     """CV chat endpoint for AI-powered updates"""
 
-    @jwt_required()
     @cv_ns.expect(chat_model)
-    def post(self, cv_id):
-        """Update CV data through conversational AI"""
+    def post(self):
+        """Update CV data through conversational AI — works for guests and logged-in users"""
         try:
-            user_id = get_jwt_identity()
+            # Try JWT — don't fail if missing
+            user_id = None
+            try:
+                verify_jwt_in_request(optional=True)
+                user_id = get_jwt_identity()
+            except Exception:
+                pass
+
             data = request.json
             user_message = data.get("message", "").strip()
 
             if not user_message:
                 return {"message": "Message cannot be empty"}, 400
 
-            cv = CV.query.filter_by(id=cv_id, user_id=user_id).first()
+            if not limit_message_length(user_message):
+                return {"message": "Message exceeds maximum allowed length"}, 400
 
-            if not cv:
-                return {"message": "CV not found"}, 404
+            # Rate limiting
+            if user_id:
+                if not check_and_increment_message_limit(user_id):
+                    return {"message": "Message limit reached for today. Please try again tomorrow."}, 429
+            else:
+                
+                if not check_and_increment_guest_limit():
+                    return {"message": "Guest message limit reached. Please register to continue."}, 429
 
-            # Get existing CV data or initialize empty
-            existing_data = cv.cv_data if cv.cv_data else {
-                "personal_info": {
-                    "name": "",
-                    "email": "",
-                    "phone": "",
-                    "location": "",
-                    "position": "",
-                    "summary": ""
-                },
-                "experience": [],
-                "education": [],
-                "skills": [],
-                "projects": [],
-                "research_and_publications": [],
-                "certifications": [],
-            }
+            # Get existing CV data
+            if user_id:
+                cv_id = data.get("cv_id")
+                cv = CV.query.filter_by(id=cv_id, user_id=user_id).first() if cv_id else None
+                existing_data = cv.cv_data if cv and cv.cv_data else get_empty_cv()
+            else:
+                cv = None
+                # Guest sends cv_data in request body — lives only in frontend
+                existing_data = data.get("cv_data") or get_empty_cv()
 
-            # Generate conversational response from AI
+            # Generate AI response
             ai_response = generate_structured_cv(user_message, existing_data)
 
             if not ai_response:
                 return {"message": "AI request failed"}, 500
 
             if not isinstance(ai_response, dict) or "cv_data" not in ai_response:
-                print(f"Invalid AI response structure: {ai_response}")
                 return {
                     "message": "AI returned invalid response structure",
                     "hint": "Please try rephrasing your message"
                 }, 500
 
-            # Update CV data
-            cv.cv_data = ai_response.get("cv_data", existing_data)
-            db.session.commit()
+            # Save to DB only if logged in
+            if user_id and cv:
+                cv.cv_data = ai_response.get("cv_data", existing_data)
+                db.session.commit()
 
             return {
                 "message": "CV updated successfully",
-                "cv_data": cv.cv_data,
+                "cv_data": ai_response.get("cv_data"),
                 "ai_response": ai_response.get("ai_message", ""),
                 "next_question": ai_response.get("next_question", ""),
                 "progress_percentage": ai_response.get("progress_percentage", 0),
                 "current_section": ai_response.get("current_section", "personal_info"),
-                "all_complete": ai_response.get("all_complete", False)
+                "all_complete": ai_response.get("all_complete", False),
+                "is_guest": user_id is None
             }, 200
-            
+
         except Exception as e:
             db.session.rollback()
             print(f"Error in CV chat: {str(e)}")
             print(traceback.format_exc())
             return {"message": f"Error updating CV: {str(e)}"}, 500
+
+
+def get_empty_cv():
+    return {
+        "personal_info": {
+            "name": "", "email": "", "phone": "",
+            "location": "", "position": "", "summary": ""
+        },
+        "experience": [],
+        "education": [],
+        "skills": [],
+        "projects": [],
+        "research_and_publications": [],
+        "certifications": [],
+    }

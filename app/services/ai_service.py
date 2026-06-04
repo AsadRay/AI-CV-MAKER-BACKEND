@@ -12,7 +12,7 @@ def clean_ai_response(text):
     return text.strip()
 
 
-def generate_structured_cv(user_message, existing_data=None):
+def generate_structured_cv(user_message, existing_data=None, chat_history=None): 
     """
     Generate or update CV data through conversational AI.
     AI asks questions and fills data progressively.
@@ -93,7 +93,7 @@ PAGE BREAKS (set to true to force section onto a new page):
   "start projects on page 2" / "projects on new page"       → page_break_before_projects: true
   "start certifications on new page"                         → page_break_before_certifications: true
   "start experience on new page"                             → page_break_before_experience: true
-  "start education on new page"                              → page_break_before_education: true
+  "start education on new page"                             → page_break_before_education: true
   "start skills on new page"                                 → page_break_before_skills: true
   "start research on new page"                               → page_break_before_research: true
   To remove a page break, set the value back to false.
@@ -205,10 +205,18 @@ IMPORTANT Rules for UPDATING:
 - Only UPDATE specific fields the user mentions
 - Keep all other existing data intact
 - For layout commands, only update the specific layout_settings fields mentioned
-- Ask "Is there anything else you'd like to update?" when they seem done
+
+CHANGED HERE — replaced "ask anything else" with smart completion awareness:
+COMPLETION RULES:
+- Check cv_data to see which sections still have empty or missing data
+- If ANY important section is empty (experience, education, skills):
+  set all_complete=false, and in ai_message clearly say what's saved and what's missing.
+  Example: "Great! Personal Info is saved ✅. Still missing: Experience, Skills, Projects. Want to add those?"
+- Only say "Is there anything else you'd like to update?" when ALL sections have real data
+  and set all_complete=true at that point
+- NEVER say "Is there anything else?" if sections are still empty
 """
 
-    # ─── SYSTEM PROMPT: NEW CV MODE ───────────────────────────────────────────
     else:
         system_prompt = f"""
 You are a professional resume builder having a friendly conversation with the user.
@@ -291,7 +299,6 @@ Rules:
 - Provide a friendly acknowledgment in "ai_message"
 - Update "progress_percentage" (0-100) based on completion
 - Set "current_section" to the section you're working on
-- Set "all_complete": true when entire CV is complete
 - Be friendly and encouraging
 - If user says "skip" or "next", move to the next section
 
@@ -303,6 +310,15 @@ Section Order:
 5. projects (name, description, technologies, link)
 6. certifications (name, issuer, date, expiry_date, credential_id)
 7. research_and_publications (title, publication, date, link)
+
+CHANGED HERE — replaced "set all_complete true when done" with smart completion awareness:
+COMPLETION RULES:
+- After each message, check cv_data for empty sections
+- If sections are still empty: set all_complete=false, and in ai_message mention
+  what's filled so far and what's still missing.
+  Example: "Personal Info saved ✅. Now let's move to Education!"
+- Only set all_complete=true when ALL 7 sections have real data
+- NEVER say "Is there anything else?" if sections are still empty
 """
 
     # ─── USER CONTENT ─────────────────────────────────────────────────────────
@@ -334,13 +350,18 @@ Update the CV data with any new information from the user's message, then ask th
 Remember to output ONLY JSON, nothing else. No explanations, no markdown.
 """
 
+    # CHANGED HERE — build messages dynamically with chat history instead of hardcoded list
+    messages = [{"role": "system", "content": system_prompt}]
+
+    if chat_history:
+        messages.extend(chat_history)  # CHANGED HERE — inject previous conversation turns
+
+    messages.append({"role": "user", "content": user_content})  # CHANGED HERE — current message goes last
+
     payload = {
         "model": "openrouter/auto",
         "temperature": 0.3,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content}
-        ]
+        "messages": messages  # CHANGED HERE — was hardcoded 2-item list, now includes full history
     }
 
     try:

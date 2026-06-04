@@ -8,8 +8,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from ..models.user import User
 from ..extensions import db
 import uuid
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import smtplib
+from app.config import Config
 
-resend.api_key = os.getenv('RESEND_API_KEY')
 
 r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
 
@@ -78,13 +81,29 @@ def send_otp_email(to_email, otp):
     </html>
     """
 
-    params = {
-        "from": "onboarding@resend.dev",
-        "to": "asaduzzamanrayhan15@gmail.com",
-        "subject": "Your OTP Code - CV Builder",
-        "html": html
-    }
-    return resend.Emails.send(params)
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = "Your OTP Code - CV Builder"
+    msg['From'] = Config.MAIL_USERNAME
+    msg['To'] = to_email
+
+    msg.attach(MIMEText(html, 'html'))
+
+    try:
+        if Config.MAIL_USE_SSL:
+            with smtplib.SMTP_SSL(Config.MAIL_SERVER, Config.MAIL_PORT) as server:
+                server.login(Config.MAIL_USERNAME, Config.MAIL_PASSWORD)
+                server.sendmail(Config.MAIL_USERNAME, to_email, msg.as_string())
+        else:
+            with smtplib.SMTP(Config.MAIL_SERVER, Config.MAIL_PORT) as server:
+                if Config.MAIL_USE_TLS:
+                    server.starttls()
+                server.login(Config.MAIL_USERNAME, Config.MAIL_PASSWORD)
+                server.sendmail(Config.MAIL_USERNAME, to_email, msg.as_string())
+
+        return {"message": "Email sent successfully"}
+
+    except smtplib.SMTPException as e:
+        return {"error": str(e)}
 
 
 

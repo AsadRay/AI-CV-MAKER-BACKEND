@@ -11,6 +11,8 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)  # store hashed password
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    message_count = db.Column(db.Integer, default=0)  # Track daily message count
+    message_reset_date = db.Column(db.Date, default=datetime.utcnow)  # Track when to reset message count
 
     def set_password(self, password):
         """Hashes the password and stores it"""
